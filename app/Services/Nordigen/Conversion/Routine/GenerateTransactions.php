@@ -230,19 +230,48 @@ class GenerateTransactions
             'external_id'        => $entry->transactionId,
             'internal_reference' => $entry->accountIdentifier,
         ];
+		
+		$appended = false;
 
-        if (1 === bccomp($entry->transactionAmount, '0')) {
-            app('log')->debug('Amount is positive: assume transfer or deposit.');
-            $transaction = $this->appendPositiveAmountInfo($accountId, $transaction, $entry);
-        }
-
-        if (-1 === bccomp($entry->transactionAmount, '0')) {
-            app('log')->debug('Amount is negative: assume transfer or withdrawal.');
+        if (('' !== $entry->creditorName)) {
+			if (1 === bccomp($entry->transactionAmount, '0')) {
+				// because appendNegativeAmountInfo multiplies by -1
+				$entry->transactionAmount = bcmul($entry->transactionAmount, '-1');
+			}
             $transaction = $this->appendNegativeAmountInfo($accountId, $transaction, $entry);
+			$appended = true;
+		}	
+						
+        if ((!$appended) and ('' !== $entry->debtorName)) {
+            $transaction = $this->appendPositiveAmountInfo($accountId, $transaction, $entry);
+			$appended = true;
         }
+
+        /* Triodos NL, see https://developer.triodos.com/docs/proprietary-bank-transaction-codes  */
+        if ((!$appended) and ('BA' === $entry->proprietaryBankTransactionCode)) {
+			if (1 === bccomp($entry->transactionAmount, '0')) {
+				// because appendNegativeAmountInfo multiplies by -1
+				$entry->transactionAmount = bcmul($entry->transactionAmount, '-1');
+			}
+            $transaction = $this->appendNegativeAmountInfo($accountId, $transaction, $entry);
+			$appended = true;
+		}	
+
+        // when all failed, then do the original statements
+        if (!$appended) {
+			if (1 === bccomp($entry->transactionAmount, '0')) {
+				app('log')->debug('Amount is positive: assume transfer or deposit.');
+				$transaction = $this->appendPositiveAmountInfo($accountId, $transaction, $entry);
+			}
+
+			if (-1 === bccomp($entry->transactionAmount, '0')) {
+				app('log')->debug('Amount is negative: assume transfer or withdrawal.');
+				$transaction = $this->appendNegativeAmountInfo($accountId, $transaction, $entry);
+			}
+		}	
+
         $return['transactions'][] = $transaction;
         app('log')->debug(sprintf('Parsed Nordigen transaction "%s".', $entry->transactionId));
-
 
         return $return;
     }
