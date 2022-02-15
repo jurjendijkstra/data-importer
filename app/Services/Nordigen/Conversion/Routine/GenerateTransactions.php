@@ -234,10 +234,6 @@ class GenerateTransactions
 		$appended = false;
 
         if (('' !== $entry->creditorName)) {
-			if (1 === bccomp($entry->transactionAmount, '0')) {
-				// because appendNegativeAmountInfo multiplies by -1
-				$entry->transactionAmount = bcmul($entry->transactionAmount, '-1');
-			}
             $transaction = $this->appendNegativeAmountInfo($accountId, $transaction, $entry);
 			$appended = true;
 		}	
@@ -249,10 +245,6 @@ class GenerateTransactions
 
         /* Triodos NL, see https://developer.triodos.com/docs/proprietary-bank-transaction-codes  */
         if ((!$appended) and ('BA' === $entry->proprietaryBankTransactionCode)) {
-			if (1 === bccomp($entry->transactionAmount, '0')) {
-				// because appendNegativeAmountInfo multiplies by -1
-				$entry->transactionAmount = bcmul($entry->transactionAmount, '-1');
-			}
             $transaction = $this->appendNegativeAmountInfo($accountId, $transaction, $entry);
 			$appended = true;
 		}	
@@ -266,6 +258,7 @@ class GenerateTransactions
 
 			if (-1 === bccomp($entry->transactionAmount, '0')) {
 				app('log')->debug('Amount is negative: assume transfer or withdrawal.');
+                $transaction['amount'] = bcmul($entry->transactionAmount, '-1');
 				$transaction = $this->appendNegativeAmountInfo($accountId, $transaction, $entry);
 			}
 		}	
@@ -440,7 +433,6 @@ class GenerateTransactions
     private function appendNegativeAmountInfo(string $accountId, array $transaction, Transaction $entry): array
     {
 
-        $transaction['amount']    = bcmul($entry->transactionAmount, '-1');
         $transaction['source_id'] = (int)$this->accounts[$accountId]; // TODO entry may not exist, then what?
 
         // append source iban and number (if present)
