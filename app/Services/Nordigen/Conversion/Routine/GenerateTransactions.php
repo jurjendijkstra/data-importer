@@ -231,37 +231,47 @@ class GenerateTransactions
             'internal_reference' => $entry->accountIdentifier,
         ];
 		
-		$appended = false;
+        $transactiontype = '';
 
-        if (('' !== $entry->creditorName)) {
-            $transaction = $this->appendNegativeAmountInfo($accountId, $transaction, $entry);
-			$appended = true;
+        if (('' === $transactiontype) and ('' !== $entry->creditorName)) {
+            app('log')->debug('creditorName: assume withdrawal.');
+            $transactiontype = 'withdrawal';
 		}	
 						
-        if ((!$appended) and ('' !== $entry->debtorName)) {
-            $transaction = $this->appendPositiveAmountInfo($accountId, $transaction, $entry);
-			$appended = true;
+        if (('' === $transactiontype) and ('' !== $entry->debtorName)) {
+            app('log')->debug('debtorName: assume deposit.');
+            $transactiontype = 'deposit';
         }
 
         /* Triodos NL, see https://developer.triodos.com/docs/proprietary-bank-transaction-codes  */
-        if ((!$appended) and ('BA' === $entry->proprietaryBankTransactionCode)) {
-            $transaction = $this->appendNegativeAmountInfo($accountId, $transaction, $entry);
-			$appended = true;
+        if (('' === $transactiontype) and ('BA' === $entry->proprietaryBankTransactionCode)) {
+            app('log')->debug('"BetaalAutomaat": assume withdrawal.');
+            $transactiontype = 'withdrawal';
 		}	
 
-        // when all failed, then do the original statements
-        if (!$appended) {
+        if ('' === $transactiontype) {
 			if (1 === bccomp($entry->transactionAmount, '0')) {
 				app('log')->debug('Amount is positive: assume transfer or deposit.');
-				$transaction = $this->appendPositiveAmountInfo($accountId, $transaction, $entry);
+                $transactiontype = 'deposit';
 			}
 
 			if (-1 === bccomp($entry->transactionAmount, '0')) {
 				app('log')->debug('Amount is negative: assume transfer or withdrawal.');
-                $transaction['amount'] = bcmul($entry->transactionAmount, '-1');
-				$transaction = $this->appendNegativeAmountInfo($accountId, $transaction, $entry);
+                $transactiontype = 'withdrawal';
 			}
 		}	
+
+        if ('deposit' === $transactiontype) {
+            $transaction = $this->appendPositiveAmountInfo($accountId, $transaction, $entry);
+        }
+
+        if ('withdrawal' === $transactiontype) {
+			if (1 === bccomp($entry->transactionAmount, '0')) {
+				// to compensate that appendNegativeAmountInfo multiplies by -1
+				$entry->transactionAmount = bcmul($entry->transactionAmount, '-1');
+			}
+            $transaction = $this->appendNegativeAmountInfo($accountId, $transaction, $entry);
+        }
 
         $return['transactions'][] = $transaction;
         app('log')->debug(sprintf('Parsed Nordigen transaction "%s".', $entry->transactionId));
@@ -433,6 +443,7 @@ class GenerateTransactions
     private function appendNegativeAmountInfo(string $accountId, array $transaction, Transaction $entry): array
     {
 
+        $transaction['amount']    = bcmul($entry->transactionAmount, '-1');
         $transaction['source_id'] = (int)$this->accounts[$accountId]; // TODO entry may not exist, then what?
 
         // append source iban and number (if present)
