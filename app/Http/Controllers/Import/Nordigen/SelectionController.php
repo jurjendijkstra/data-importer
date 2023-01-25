@@ -61,6 +61,7 @@ class SelectionController extends Controller
 
     /**
      * Step 9, select a country + bank.
+     *
      * @return Factory|View
      * @throws ImporterErrorException
      */
@@ -97,13 +98,15 @@ class SelectionController extends Controller
         }
 
         if ($response instanceof ErrorResponse) {
-            throw new ImporterErrorException((string) $response->message);
+            throw new ImporterErrorException((string)$response->message);
         }
+
         return view('import.009-selection.index', compact('mainTitle', 'subTitle', 'response', 'countries', 'configuration'));
     }
 
     /**
      * @param SelectionRequest $request
+     *
      * @return Application|RedirectResponse|Redirector
      * @throws ImporterErrorException
      */
@@ -121,6 +124,7 @@ class SelectionController extends Controller
 
         $configuration->setNordigenCountry($values['country']);
         $configuration->setNordigenBank($values['bank']);
+        $configuration->setNordigenMaxDays($values['days']);
 
         // save config
         $json = '[]';
@@ -137,5 +141,4 @@ class SelectionController extends Controller
         // send to Nordigen for approval
         return redirect(route('010-build-link.index'));
     }
-
 }

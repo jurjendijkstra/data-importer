@@ -2,6 +2,146 @@
 All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/).
 
+## 1.0.0 - 2022-01-23
+
+- ⚠️ This release requires PHP 8.2.
+- ⚠️ This release may create duplicate transactions. Don't import large batches!
+
+### Added
+- The data importer has a health checkpoint, thanks @davidschlachter!
+
+### Changed
+- ⚠️ Use Nordigen's internal transaction ID as the transaction ID.
+- Switch to Mastodon in the readme.
+- Fix the link to the PHP docs, thanks @sa7mon!
+- Small fixes to the `.env.example` file, thanks @axelsimon!
+
+### Fixed
+- [Issue 6518](https://github.com/firefly-iii/firefly-iii/issues/6518) Issue with bad account listings
+- Fix bad method call
+- Make sure CSV import values are trimmed (prevents account names like `PAYPAL    `)
+
+## 0.9.17 - 2021-10-24
+
+⚠️ This release WILL create duplicate transactions. Don't import large batches!
+
+### Added
+- Better error handling.
+
+### Fixed
+- Fix [issue 6548](https://github.com/firefly-iii/firefly-iii/issues/6548)
+- Fix [issue 6525](https://github.com/firefly-iii/firefly-iii/issues/6525)
+
+## 0.9.16 - 2022-09-12
+
+### Added
+- Ability to recognize 'Charge' as a debit transaction.
+- Expand error messages with URL.
+- Log more errors.
+
+### Fixed
+- [Issue 6354](https://github.com/firefly-iii/firefly-iii/issues/6354) Path fix for subdirectory installations.
+- [Issue 6377](https://github.com/firefly-iii/firefly-iii/issues/6377) Switch issue were transaction amounts were reversed (and thus also the types)
+- [Issue 6412](https://github.com/firefly-iii/firefly-iii/issues/6412) Update for command line import.
+- [Issue 6419](https://github.com/firefly-iii/firefly-iii/issues/6419) Time out and SSL check wasn't consistent.
+
+### Security
+- Update packages
+
+## 0.9.15 - 2022-07-25
+
+### Fixed
+- [Issue 6259](https://github.com/firefly-iii/firefly-iii/issues/6259) Fixed an issue where deposits would not be given a source account.
+
+## 0.9.14 - 2022-07-21
+
+### Added
+- Fallback to additional information field if description is empty, thanks @martinslota
+
+### Fixed
+- [Issue 6242](https://github.com/firefly-iii/firefly-iii/issues/6242) Bad string conversion when dates are empty.
+- [Issue 6244](https://github.com/firefly-iii/firefly-iii/issues/6244) Rename field from 'uri' to 'url'.
+- Fix missing field data check for spectre imports.
+
+## 0.9.13 - 2022-07-19
+
+### Fixed
+- Fixed an issue where the importer would break when importing mapped transactions.
+
+## 0.9.12 - 2022-07-16
+
+### Fixed
+- Make sure packages match PHP 8.0
+
+## 0.9.11 - 2022-07-16
+
+### Fixed
+- Issue where config files with empty strings would break the date selection.
+- [Issue 6146](https://github.com/firefly-iii/firefly-iii/issues/6146) Fix issue where missing Nordigen data would break the import.
+- [Issue 6233](https://github.com/firefly-iii/firefly-iii/issues/6233) Fix issue where mapping an expense account to a revenue spot would break the import.
+- Fix issue where the importer would not detect empty descriptions. Thanks @BerghsJelmer
+
+## 0.9.10 - 2022-05-03
+
+### Changed
+- Require the most recent version of Firefly III
+
+## 0.9.9 - 2022-05-03
+
+### Changed
+- Made the texts more generic to accommodate future changes
+- Catch deleted transactions
+- Require most recent Firefly III
+
+### Fixed
+- [Issue 5980](https://github.com/firefly-iii/firefly-iii/issues/5980) Fix date range.
+
+## 0.9.8 - 2022-04-13
+
+### Fixed
+- Fixes an issue with an underlying package.
+
+## 0.9.7 - 2022-04-11
+
+### Fixed
+- Fixes an issue with an underlying package.
+
+## 0.9.6 - 2022-04-11
+
+### Fixed
+- Fixes an issue with an underlying package.
+
+## 0.9.5 - 2022-04-10
+
+### Fixed
+- Fixes an issue with an underlying package.
+
+## 0.9.4 - 2022-04-10
+
+### Fixed
+- Fixes another issue with detecting duplicate transactions.
+
+## 0.9.3 - 2022-04-05
+
+### Fixed
+
+- A small change should make it easier for the data importer to detect failed transaction creation attempts.
+- [Issue 5964](https://github.com/firefly-iii/firefly-iii/issues/5964) Updated libraries to fix issue.
+
+## 0.9.2 - 2022-04-02
+
+### Fixed
+- Removed some overly chatty status messages.
+
+## 0.9.1 - 2022-04-02
+
+### Added
+- There is an option to set the maximum days to import from Nordigen, thanks @krehl!
+- Importer will now report expired Nordigen User Agreements, thanks @MacPaille!
+
+### Fixed
+- [Issue 5871](https://github.com/firefly-iii/firefly-iii/issues/5871) Importer would ignore time-outs
+
 ## 0.9.0 - 2022-02-22
 
 - ⚠️ This release WILL create duplicate transactions. Don't import large batches!

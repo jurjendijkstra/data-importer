@@ -31,7 +31,6 @@ use ValueError;
  */
 class Iban implements ConverterInterface
 {
-
     /**
      * Convert a value.
      *
@@ -42,12 +41,12 @@ class Iban implements ConverterInterface
      */
     public function convert($value)
     {
-        if ($this->isValidIban($value)) {
+        if (self::isValidIban($value)) {
             // strip spaces from IBAN and make upper case.
             $result = str_replace("\x20", '', strtoupper(app('steam')->cleanStringAndNewlines($value)));
             app('log')->debug(sprintf('Converted "%s" to "%s"', $value, $result));
 
-            return $result;
+            return trim($result);
         }
         app('log')->info(sprintf('"%s" is not a valid IBAN.', $value));
 
@@ -55,11 +54,20 @@ class Iban implements ConverterInterface
     }
 
     /**
+     * Add extra configuration parameters.
+     *
+     * @param string $configuration
+     */
+    public function setConfiguration(string $configuration): void
+    {
+    }
+
+    /**
      * @param string $value
      *
      * @return bool
      */
-    private function isValidIban(string $value): bool
+    public static function isValidIban(string $value): bool
     {
         app('log')->debug(sprintf('isValidIBAN("%s")', $value));
         $value = strtoupper(trim(app('steam')->cleanStringAndNewlines($value)));
@@ -80,16 +88,6 @@ class Iban implements ConverterInterface
             $checksum = 2;
         }
 
-        return 1 === (int) $checksum;
-    }
-
-    /**
-     * Add extra configuration parameters.
-     *
-     * @param string $configuration
-     */
-    public function setConfiguration(string $configuration): void
-    {
-
+        return 1 === (int)$checksum;
     }
 }

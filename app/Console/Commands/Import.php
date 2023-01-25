@@ -37,7 +37,9 @@ use Illuminate\Console\Command;
  */
 class Import extends Command
 {
-    use HaveAccess, VerifyJSON, AutoImports;
+    use HaveAccess;
+    use VerifyJSON;
+    use AutoImports;
 
     /**
      * The console command description.
@@ -52,7 +54,7 @@ class Import extends Command
      */
     protected $signature = 'importer:import
     {config : The configuration file. }
-    {file? : Optionally, the CSV file you want to import}
+    {file? : Optionally, the importable file you want to import}
     ';
 
     /**
@@ -65,21 +67,22 @@ class Import extends Command
     {
         $access = $this->haveAccess();
         if (false === $access) {
-            $this->error('Could not connect to your local Firefly III instance.');
+            $this->error(sprintf('Could not connect to your local Firefly III instance at %s.', config('importer.url')));
 
             return 1;
         }
 
         $this->info(sprintf('Welcome to the Firefly III data importer, v%s', config('importer.version')));
         app('log')->debug(sprintf('Now in %s', __METHOD__));
-        $file   = (string) $this->argument('file');
-        $config = (string) $this->argument('config');
+        $file   = (string)$this->argument('file');
+        $config = (string)$this->argument('config');
 
         // validate config path:
         if ('' !== $config) {
             $directory = dirname($config);
             if (!$this->isAllowedPath($directory)) {
                 $this->error(sprintf('Path "%s" is not in the list of allowed paths (IMPORT_DIR_WHITELIST).', $directory));
+
                 return 1;
             }
         }
@@ -87,6 +90,7 @@ class Import extends Command
             $directory = dirname($file);
             if (!$this->isAllowedPath($directory)) {
                 $this->error(sprintf('Path "%s" is not in the list of allowed paths (IMPORT_DIR_WHITELIST).', $directory));
+
                 return 1;
             }
         }
@@ -108,13 +112,15 @@ class Import extends Command
             return 1;
         }
         $configuration = Configuration::fromArray(json_decode(file_get_contents($config), true));
-        if ('csv' === $configuration->getFlow() && (!file_exists($file) || (file_exists($file) && !is_file($file)))) {
-            $message = sprintf('The importer can\'t import: CSV file "%s" does not exist or could not be read.', $file);
+        if ('file' === $configuration->getFlow() && (!file_exists($file) || (file_exists($file) && !is_file($file)))) {
+            $message = sprintf('The importer can\'t import: importable file "%s" does not exist or could not be read.', $file);
             $this->error($message);
             app('log')->error($message);
 
             return 1;
         }
+
+        $configuration->updateDateRange();
 
         $this->line('The import routine is about to start.');
         $this->line('This is invisible and may take quite some time.');
@@ -132,8 +138,14 @@ class Import extends Command
 
         $this->line('Done!');
 
-        event(new ImportedTransactions($this->importMessages, $this->importWarnings, $this->importErrors));
-        return 0;
+        event(
+            new ImportedTransactions(
+                array_merge($this->importMessages, $this->conversionMessages),
+                array_merge($this->importWarnings, $this->conversionWarnings),
+                array_merge($this->importErrors, $this->conversionErrors)
+            )
+        );
 
+        return 0;
     }
 }

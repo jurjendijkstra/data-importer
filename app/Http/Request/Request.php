@@ -54,32 +54,27 @@ class Request extends FormRequest
     }
 
     /**
-     * Return floating value.
-     *
-     * @param string $field
-     *
-     * @return float|null
-     */
-    public function float(string $field): ?float
-    {
-        $res = $this->get($field);
-        if (null === $res) {
-            return null;
-        }
-
-        return (float) $res;
-    }
-
-    /**
      * Return integer value.
      *
      * @param string $field
      *
      * @return int
      */
-    public function integer(string $field): int
+    public function convertToInteger(string $field): int
     {
-        return (int) $this->get($field);
+        return (int)$this->get($field);
+    }
+
+    /**
+     * Return string value.
+     *
+     * @param string $field
+     *
+     * @return string
+     */
+    public function convertToString(string $field): string
+    {
+        return app('steam')->cleanStringAndNewlines((string)($this->get($field) ?? ''));
     }
 
     /**
@@ -98,7 +93,7 @@ class Request extends FormRequest
             return null;
         }
 
-        return (int) $string;
+        return (int)$string;
     }
 
     /**
@@ -114,12 +109,12 @@ class Request extends FormRequest
             return null;
         }
 
-        $value = (string) $this->get($field);
+        $value = (string)$this->get($field);
         if ('' === $value) {
             return null;
         }
 
-        return (int) $value;
+        return (int)$value;
     }
 
     /**
@@ -135,19 +130,7 @@ class Request extends FormRequest
             return null;
         }
 
-        return app('steam')->cleanStringAndNewlines((string) ($this->get($field) ?? ''));
-    }
-
-    /**
-     * Return string value.
-     *
-     * @param string $field
-     *
-     * @return string
-     */
-    public function string(string $field): string
-    {
-        return app('steam')->cleanStringAndNewlines((string) ($this->get($field) ?? ''));
+        return app('steam')->cleanStringAndNewlines((string)($this->get($field) ?? ''));
     }
 
     /**
@@ -165,7 +148,6 @@ class Request extends FormRequest
         $result = app('steam')->cleanStringAndNewlines($string);
 
         return '' === $result ? null : $result;
-
     }
 
     /**

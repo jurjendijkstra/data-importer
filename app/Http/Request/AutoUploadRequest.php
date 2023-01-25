@@ -22,9 +22,7 @@
 
 declare(strict_types=1);
 
-
 namespace App\Http\Request;
-
 
 class AutoUploadRequest extends Request
 {
@@ -45,9 +43,8 @@ class AutoUploadRequest extends Request
     public function rules(): array
     {
         return [
-            'csv'  => 'file',
-            'json' => 'required|file',
+            'importable' => 'file',
+            'json'       => 'required|file',
         ];
-
     }
 }

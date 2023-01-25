@@ -35,14 +35,16 @@ use Illuminate\Console\Command;
  */
 class AutoImport extends Command
 {
-    use HaveAccess, VerifyJSON, AutoImports;
+    use HaveAccess;
+    use VerifyJSON;
+    use AutoImports;
 
     /**
      * The console command description.
      *
      * @var string
      */
-    protected $description = 'Will automatically import from the given directory and use the JSON and CSV files found.';
+    protected $description = 'Will automatically import from the given directory and use the JSON and importable files found.';
     /**
      * The name and signature of the console command.
      *
@@ -59,15 +61,16 @@ class AutoImport extends Command
     {
         $access = $this->haveAccess();
         if (false === $access) {
-            $this->error('Could not connect to your local Firefly III instance.');
+            $this->error(sprintf('Could not connect to your local Firefly III instance at %s.', config('importer.url')));
 
             return 1;
         }
 
-        $argument  = (string) ($this->argument('directory') ?? './');
+        $argument  = (string)($this->argument('directory') ?? './');
         $directory = realpath($argument);
         if (!$this->isAllowedPath($directory)) {
             $this->error(sprintf('Path "%s" is not in the list of allowed paths (IMPORT_DIR_WHITELIST).', $directory));
+
             return 1;
         }
         $this->line(sprintf('Going to automatically import everything found in %s (%s)', $directory, $argument));
@@ -80,7 +83,7 @@ class AutoImport extends Command
 
             return 1;
         }
-        $this->line(sprintf('Found %d (CSV +) JSON file sets in %s', count($files), $directory));
+        $this->line(sprintf('Found %d (importable +) JSON file sets in %s', count($files), $directory));
         try {
             $this->importFiles($directory, $files);
         } catch (ImporterErrorException $e) {

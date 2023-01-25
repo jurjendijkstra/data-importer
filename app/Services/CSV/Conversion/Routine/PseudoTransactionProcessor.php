@@ -45,9 +45,9 @@ class PseudoTransactionProcessor
 {
     use ProgressInformation;
 
-    private array               $tasks;
     private Account             $defaultAccount;
     private TransactionCurrency $defaultCurrency;
+    private array               $tasks;
 
     /**
      * PseudoTransactionProcessor constructor.
@@ -109,7 +109,7 @@ class PseudoTransactionProcessor
             app('log')->error($e->getMessage());
             throw new ImporterErrorException('Could not load the users currency preference.');
         }
-        $code            = $response->getPreference()->data ?? 'EUR';
+        $code            = $response->getPreference()->stringData ?? 'EUR';
         $currencyRequest = new GetCurrencyRequest($url, $token);
         $currencyRequest->setVerify(config('importer.connection.verify'));
         $currencyRequest->setTimeOut(config('importer.connection.timeout'));
@@ -144,7 +144,6 @@ class PseudoTransactionProcessor
         app('log')->info(sprintf('Done converting %d lines into transactions.', $count));
 
         return $processed;
-
     }
 
     /**
@@ -173,5 +172,4 @@ class PseudoTransactionProcessor
 
         return $line;
     }
-
 }

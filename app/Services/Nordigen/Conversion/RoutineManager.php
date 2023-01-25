@@ -23,7 +23,6 @@
 
 declare(strict_types=1);
 
-
 namespace App\Services\Nordigen\Conversion;
 
 use App\Exceptions\ImporterErrorException;
@@ -40,15 +39,16 @@ use App\Services\Shared\Conversion\RoutineManagerInterface;
  */
 class RoutineManager implements RoutineManagerInterface
 {
+    use IsRunningCli;
+    use GeneratesIdentifier;
+
+    private array $allErrors;
     private array $allMessages;
     private array $allWarnings;
-    private array $allErrors;
-    use IsRunningCli, GeneratesIdentifier;
-
     private Configuration        $configuration;
-    private TransactionProcessor $transactionProcessor;
-    private GenerateTransactions $transactionGenerator;
     private FilterTransactions   $transactionFilter;
+    private GenerateTransactions $transactionGenerator;
+    private TransactionProcessor $transactionProcessor;
 
     /**
      *
@@ -66,9 +66,33 @@ class RoutineManager implements RoutineManagerInterface
         if (null !== $identifier) {
             $this->identifier = $identifier;
         }
-        $this->transactionProcessor = new TransactionProcessor;
-        $this->transactionGenerator = new GenerateTransactions;
-        $this->transactionFilter    = new FilterTransactions;
+        $this->transactionProcessor = new TransactionProcessor();
+        $this->transactionGenerator = new GenerateTransactions();
+        $this->transactionFilter    = new FilterTransactions();
+    }
+
+    /**
+     * @return array
+     */
+    public function getAllErrors(): array
+    {
+        return $this->allErrors;
+    }
+
+    /**
+     * @return array
+     */
+    public function getAllMessages(): array
+    {
+        return $this->allMessages;
+    }
+
+    /**
+     * @return array
+     */
+    public function getAllWarnings(): array
+    {
+        return $this->allWarnings;
     }
 
     /**
@@ -88,7 +112,6 @@ class RoutineManager implements RoutineManagerInterface
         $this->transactionProcessor->setIdentifier($this->identifier);
         $this->transactionGenerator->setIdentifier($this->identifier);
         $this->transactionFilter->setIdentifier($this->identifier);
-
     }
 
     /**
@@ -103,6 +126,16 @@ class RoutineManager implements RoutineManagerInterface
         app('log')->debug('Call transaction processor download.');
         $nordigen = $this->transactionProcessor->download();
 
+        // collect errors from transactionProcessor.
+        $this->mergeMessages($this->transactionProcessor->getMessages());
+        $this->mergeWarnings($this->transactionProcessor->getWarnings());
+        $this->mergeErrors($this->transactionProcessor->getErrors());
+
+        if (0 === count($nordigen)) {
+            app('log')->warning('Downloaded nothing, will return nothing.');
+
+            return $nordigen;
+        }
         // generate Firefly III ready transactions:
         app('log')->debug('Generating Firefly III transactions.');
         $this->transactionGenerator->collectTargetAccounts();
@@ -110,42 +143,80 @@ class RoutineManager implements RoutineManagerInterface
         try {
             $this->transactionGenerator->collectNordigenAccounts();
         } catch (ImporterErrorException $e) {
-            app('log')->error('Could not collect info on all Nordigen accounts, but this info isnt used at the moment anyway.');
+            app('log')->error('Could not collect info on all Nordigen accounts, but this info isn\'t used at the moment anyway.');
             app('log')->error($e->getMessage());
         }
 
         $transactions = $this->transactionGenerator->getTransactions($nordigen);
         app('log')->debug(sprintf('Generated %d Firefly III transactions.', count($transactions)));
 
+        // collect errors from transaction generator
+        $this->mergeMessages($this->transactionGenerator->getMessages());
+        $this->mergeWarnings($this->transactionGenerator->getWarnings());
+        $this->mergeErrors($this->transactionGenerator->getErrors());
+
         $filtered = $this->transactionFilter->filter($transactions);
         app('log')->debug(sprintf('Filtered down to %d Firefly III transactions.', count($filtered)));
+
+        // collect errors from transaction filter
+        $this->mergeMessages($this->transactionFilter->getMessages());
+        $this->mergeWarnings($this->transactionFilter->getWarnings());
+        $this->mergeErrors($this->transactionFilter->getErrors());
 
         return $filtered;
     }
 
-
     /**
-     * @return array
+     * @param array $messages
+     *
+     * @return void
      */
-    public function getAllMessages(): array
+    private function mergeMessages(array $messages): void
     {
-        return $this->allMessages;
+        foreach ($messages as $index => $array) {
+            $exists = array_key_exists($index, $this->allMessages);
+            if (true === $exists) {
+                $this->allMessages[$index] = array_merge($this->allMessages[$index], $array);
+            }
+            if (false === $exists) {
+                $this->allMessages[$index] = $array;
+            }
+        }
     }
 
     /**
-     * @return array
+     * @param array $warnings
+     *
+     * @return void
      */
-    public function getAllWarnings(): array
+    private function mergeWarnings(array $warnings): void
     {
-        return $this->allWarnings;
+        foreach ($warnings as $index => $array) {
+            $exists = array_key_exists($index, $this->allWarnings);
+            if (true === $exists) {
+                $this->allWarnings[$index] = array_merge($this->allWarnings[$index], $array);
+            }
+            if (false === $exists) {
+                $this->allWarnings[$index] = $array;
+            }
+        }
     }
 
     /**
-     * @return array
+     * @param array $errors
+     *
+     * @return void
      */
-    public function getAllErrors(): array
+    private function mergeErrors(array $errors): void
     {
-        return $this->allErrors;
+        foreach ($errors as $index => $array) {
+            $exists = array_key_exists($index, $this->allErrors);
+            if (true === $exists) {
+                $this->allErrors[$index] = array_merge($this->allErrors[$index], $array);
+            }
+            if (false === $exists) {
+                $this->allErrors[$index] = $array;
+            }
+        }
     }
-
 }

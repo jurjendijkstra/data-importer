@@ -50,9 +50,9 @@ class GenerateTransactions
 
     private array         $accounts;
     private Configuration $configuration;
+    private array         $nordigenAccountInfo;
     private array         $targetAccounts;
     private array         $targetTypes;
-    private array         $nordigenAccountInfo;
 
     /**
      * GenerateTransactions constructor.
@@ -63,6 +63,51 @@ class GenerateTransactions
         $this->targetTypes         = [];
         $this->nordigenAccountInfo = [];
         bcscale(16);
+    }
+
+    /**
+     * TODO the result of this method is currently not used.
+     *
+     * @throws ImporterErrorException
+     */
+    public function collectNordigenAccounts(): void
+    {
+        if (config('importer.use_cache') && Cache::has('collect_nordigen_accounts')) {
+            app('log')->debug('Grab Nordigen accounts from cache.');
+            $this->nordigenAccountInfo = Cache::get('collect_nordigen_accounts');
+
+            return;
+        }
+        $url         = config('nordigen.url');
+        $accessToken = TokenManager::getAccessToken();
+        $info        = [];
+        app('log')->debug('Going to collect account information from Nordigen.');
+        /**
+         * @var string $nordigenIdentifier
+         * @var int    $account
+         */
+        foreach ($this->accounts as $nordigenIdentifier => $account) {
+            app('log')->debug(sprintf('Now at #%d => %s', $account, $nordigenIdentifier));
+            $set = [];
+            // get account details
+            $request = new GetAccountInformationRequest($url, $accessToken, $nordigenIdentifier);
+            $request->setTimeOut(config('importer.connection.timeout'));
+            /** @var ArrayResponse $response */
+            try {
+                $response = $request->get();
+            } catch (ImporterHttpException $e) {
+                throw new ImporterErrorException($e->getMessage(), 0, $e);
+            }
+            $accountInfo               = $response->data['account'];
+            $set['iban']               = $accountInfo['iban'] ?? '';
+            $info[$nordigenIdentifier] = $set;
+            app('log')->debug(sprintf('Collected IBAN "%s" for Nordigen account "%s"', $set['iban'], $nordigenIdentifier));
+        }
+        $this->nordigenAccountInfo = $info;
+        if (config('importer.use_cache')) {
+            Cache::put('collect_nordigen_accounts', $info, 86400); // 24h
+            app('log')->info('Stored collected Nordigen accounts in cache.');
+        }
     }
 
     /**
@@ -83,6 +128,10 @@ class GenerateTransactions
         $token   = SecretManager::getAccessToken();
         $url     = SecretManager::getBaseUrl();
         $request = new GetAccountsRequest($url, $token);
+
+        $request->setVerify(config('importer.connection.verify'));
+        $request->setTimeOut(config('importer.connection.timeout'));
+
         /** @var GetAccountsResponse $result */
         $result = $request->get();
         $return = [];
@@ -121,47 +170,62 @@ class GenerateTransactions
     }
 
     /**
-     * TODO the result of this method is currently not used.
+     * @param string $iban
      *
-     * @throws ImporterErrorException
+     * @return string
      */
-    public function collectNordigenAccounts(): void
+    private function filterSpaces(string $iban): string
     {
-        if (config('importer.use_cache') && Cache::has('collect_nordigen_accounts')) {
-            app('log')->debug('Grab Nordigen accounts from cache.');
-            $this->nordigenAccountInfo = Cache::get('collect_nordigen_accounts');
+        $search = [
+            "\u{0001}", // start of heading
+            "\u{0002}", // start of text
+            "\u{0003}", // end of text
+            "\u{0004}", // end of transmission
+            "\u{0005}", // enquiry
+            "\u{0006}", // ACK
+            "\u{0007}", // BEL
+            "\u{0008}", // backspace
+            "\u{000E}", // shift out
+            "\u{000F}", // shift in
+            "\u{0010}", // data link escape
+            "\u{0011}", // DC1
+            "\u{0012}", // DC2
+            "\u{0013}", // DC3
+            "\u{0014}", // DC4
+            "\u{0015}", // NAK
+            "\u{0016}", // SYN
+            "\u{0017}", // ETB
+            "\u{0018}", // CAN
+            "\u{0019}", // EM
+            "\u{001A}", // SUB
+            "\u{001B}", // escape
+            "\u{001C}", // file separator
+            "\u{001D}", // group separator
+            "\u{001E}", // record separator
+            "\u{001F}", // unit separator
+            "\u{007F}", // DEL
+            "\u{00A0}", // non-breaking space
+            "\u{1680}", // ogham space mark
+            "\u{180E}", // mongolian vowel separator
+            "\u{2000}", // en quad
+            "\u{2001}", // em quad
+            "\u{2002}", // en space
+            "\u{2003}", // em space
+            "\u{2004}", // three-per-em space
+            "\u{2005}", // four-per-em space
+            "\u{2006}", // six-per-em space
+            "\u{2007}", // figure space
+            "\u{2008}", // punctuation space
+            "\u{2009}", // thin space
+            "\u{200A}", // hair space
+            "\u{200B}", // zero width space
+            "\u{202F}", // narrow no-break space
+            "\u{3000}", // ideographic space
+            "\u{FEFF}", // zero width no -break space
+            "\x20", // plain old normal space
+        ];
 
-            return;
-        }
-        $url         = config('nordigen.url');
-        $accessToken = TokenManager::getAccessToken();
-        $info        = [];
-        app('log')->debug('Going to collect account information from Nordigen.');
-        /**
-         * @var string $nordigenIdentifier
-         * @var int    $account
-         */
-        foreach ($this->accounts as $nordigenIdentifier => $account) {
-            app('log')->debug(sprintf('Now at #%d => %s', $account, $nordigenIdentifier));
-            $set = [];
-            // get account details
-            $request = new GetAccountInformationRequest($url, $accessToken, $nordigenIdentifier);
-            /** @var ArrayResponse $response */
-            try {
-                $response = $request->get();
-            } catch (ImporterHttpException $e) {
-                throw new ImporterErrorException($e->getMessage(), 0, $e);
-            }
-            $accountInfo               = $response->data['account'];
-            $set['iban']               = $accountInfo['iban'] ?? '';
-            $info[$nordigenIdentifier] = $set;
-            app('log')->debug(sprintf('Collected IBAN "%s" for Nordigen account "%s"', $set['iban'], $nordigenIdentifier));
-        }
-        $this->nordigenAccountInfo = $info;
-        if (config('importer.use_cache')) {
-            Cache::put('collect_nordigen_accounts', $info, 86400); // 24h
-            app('log')->info('Stored collected Nordigen accounts in cache.');
-        }
+        return str_replace($search, '', $iban);
     }
 
     /**
@@ -190,7 +254,7 @@ class GenerateTransactions
                 app('log')->debug(sprintf('[%d/%d] Done parsing transaction.', ($index + 1), $total));
             }
         }
-        $this->addMessage(0, sprintf('Parsed %d Nordigen transactions for further processing.', count($return)));
+        //$this->addMessage(0, sprintf('Parsed %d Nordigen transactions for further processing.', count($return)));
         app('log')->debug('Done parsing transactions.');
 
         return $return;
@@ -278,9 +342,162 @@ class GenerateTransactions
         }
 
         $return['transactions'][] = $transaction;
-        app('log')->debug(sprintf('Parsed Nordigen transaction "%s".', $entry->transactionId));
+        app('log')->debug(sprintf('Parsed Nordigen transaction "%s".', $entry->transactionId), $transaction);
 
         return $return;
+    }
+
+    /**
+     * Handle transaction information when the amount is positive, and this is probably a deposit or a transfer.
+     *
+     * @param string      $accountId
+     * @param array       $transaction
+     * @param Transaction $entry
+     *
+     * @return array
+     * @throws ImporterHttpException
+     */
+    private function appendPositiveAmountInfo(string $accountId, array $transaction, Transaction $entry): array
+    {
+        // amount is positive: deposit or transfer. Nordigen account is the destination
+        $transaction['type']   = 'deposit';
+        $transaction['amount'] = $entry->transactionAmount;
+
+        // destination is a Nordigen account (has to be!)
+        $transaction['destination_id'] = (int)$this->accounts[$accountId];
+        app('log')->debug(sprintf('Destination ID is now #%d, which should be a Firefly III asset account.', $transaction['destination_id']));
+
+        // append source iban and number (if present)
+        $transaction = $this->appendAccountFields($transaction, $entry, 'source');
+
+        // TODO clean up mapping
+        $mappedId = null;
+        if (isset($transaction['source_name'])) {
+            app('log')->debug(sprintf('Check if "%s" is mapped to an account by the user.', $transaction['source_name']));
+            $mappedId = $this->getMappedAccountId($transaction['source_name']);
+        }
+        if (null === $mappedId) {
+            app('log')->debug('Its not mapped by the user.');
+        }
+
+        if (null !== $mappedId && 0 !== $mappedId) {
+            app('log')->debug(sprintf('Account name "%s" is mapped to Firefly III account ID "%d"', $transaction['source_name'], $mappedId));
+            $mappedType               = $this->getMappedAccountType($mappedId);
+            $originalSourceName       = $transaction['source_name'];
+            $transaction['source_id'] = $mappedId;
+            // catch error here:
+            try {
+                $transaction['type'] = $this->getTransactionType($mappedType, 'asset');
+                app('log')->debug(sprintf('Transaction type seems to be %s', $transaction['type']));
+            } catch (ImporterErrorException $e) {
+                app('log')->error($e->getMessage());
+                app('log')->info('Will not use mapped ID, Firefly III account is of the wrong type.');
+                unset($transaction['source_id']);
+                $transaction['source_name'] = $originalSourceName;
+            }
+        }
+
+        return $transaction;
+    }
+
+    /**
+     * @param array       $transaction
+     * @param Transaction $entry
+     * @param string      $direction
+     *
+     * @return array
+     */
+    private function appendAccountFields(array $transaction, Transaction $entry, string $direction): array
+    {
+        app('log')->debug(sprintf('Now in %s($transaction, $entry, "%s")', __METHOD__, $direction));
+
+        // these are the values we're going to use:
+        switch ($direction) {
+            default:
+                die(sprintf('Cannot handle direction "%s"', $direction));
+            case 'source':
+                $iban      = $entry->getSourceIban();
+                $number    = $entry->getSourceNumber();
+                $name      = $entry->getSourceName();
+                $idKey     = 'source_id';
+                $ibanKey   = 'source_iban';
+                $nameKey   = 'source_name';
+                $numberKey = 'source_number';
+                break;
+            case 'destination':
+                $iban      = $entry->getDestinationIban();
+                $number    = $entry->getDestinationNumber();
+                $name      = $entry->getDestinationName();
+                $idKey     = 'destination_id';
+                $ibanKey   = 'destination_iban';
+                $nameKey   = 'destination_name';
+                $numberKey = 'destination_number';
+                break;
+        }
+        app('log')->debug('Done collecting account numbers and names');
+
+        // FIDI determines the account type based on the IBAN.
+        $accountType = $this->targetTypes[$iban] ?? 'unknown';
+
+        // If the IBAN is a known target account, but it's not a liability, FIDI knows for sure this is a transfer.
+        // it will save the ID and nothing else.
+        if ('liabilities' !== $accountType
+            && '' !== (string)$iban
+            && array_key_exists((string)$iban, $this->targetAccounts)) {
+            app('log')->debug(sprintf('Recognized "%s" (IBAN) as a Firefly III asset account so this is a transfer.', $iban));
+            app('log')->debug(sprintf('Type of "%s" (IBAN) is a "%s".', $iban, $this->targetTypes[$iban]));
+            $transaction[$idKey] = $this->targetAccounts[$iban];
+            $transaction['type'] = 'transfer';
+        }
+
+        // If the IBAN is not set in the transaction, or the IBAN is not in the array of asset accounts
+        if ('' === (string)$iban || !array_key_exists((string)$iban, $this->targetAccounts)) {
+            app('log')->debug(sprintf('"%s" is not a valid IBAN OR not recognized as Firefly III asset account so submitted as-is.', $iban));
+            app('log')->debug(sprintf('IBAN is "%s", so leave field "%s" empty.', $iban, $ibanKey));
+            // FIDI will set the name as it exists in the transaction:
+            $transaction[$nameKey] = $name ?? sprintf('(unknown %s account)', $direction);
+
+            app('log')->debug(sprintf('Field "%s" will  be set to "%s".', $nameKey, $transaction[$nameKey]));
+        }
+
+        // if the IBAN is set, the IBAN will be put into the array as well.
+        if ('' !== (string)$iban) {
+            app('log')->debug(sprintf('Set field "%s" to "%s".', $ibanKey, $iban));
+            $transaction[$ibanKey] = $iban;
+        }
+
+        // If the account number is a known target account, but it's not a liability, FIDI knows for sure this is a transfer.
+        // it will save the ID and nothing else.
+        $accountType  = $this->targetTypes[$number] ?? 'unknown';
+        $numberSearch = sprintf('%s.', $number);
+        if (
+            'liabilities' !== $accountType
+            && '' !== (string)$number
+            && '.' !== $numberSearch
+            && array_key_exists($numberSearch, $this->targetAccounts)) {
+            app('log')->debug(sprintf('Recognized "%s" (number) as a Firefly III asset account so this is a transfer.', $number));
+            $transaction[$idKey] = $this->targetAccounts[$numberSearch];
+            $transaction['type'] = 'transfer';
+        }
+
+        // if the account number is empty, then it's submitted as is:
+        if ('' === (string)$number || '.' === $numberSearch || !array_key_exists($numberSearch, $this->targetAccounts)) {
+            app('log')->debug(sprintf('"%s" is not a valid account nr OR not recognized as Firefly III asset account so submitted as-is.', $number));
+            app('log')->debug(sprintf('Account number is "%s", so leave field "%s" empty.', $number, $numberKey));
+            // FIDI will set the name in the transaction
+            $transaction[$nameKey] = $name ?? sprintf('(unknown %s account)', $direction);
+
+            app('log')->debug(sprintf('Field "%s" will  be set to "%s".', $nameKey, $transaction[$nameKey]));
+        }
+
+        if ('' !== (string)$number) {
+            app('log')->debug(sprintf('Set field "%s" to "%s".', $numberKey, $number));
+            $transaction[$numberKey] = $number;
+        }
+
+        app('log')->debug(sprintf('End of %s', __METHOD__));
+
+        return $transaction;
     }
 
     /**
@@ -373,68 +590,6 @@ class GenerateTransactions
     }
 
     /**
-     * @param Configuration $configuration
-     */
-    public function setConfiguration(Configuration $configuration): void
-    {
-        $this->configuration = $configuration;
-        $this->accounts      = $configuration->getAccounts();
-    }
-
-    /**
-     * Handle transaction information when the amount is positive, and this is probably a deposit or a transfer.
-     *
-     * @param string      $accountId
-     * @param array       $transaction
-     * @param Transaction $entry
-     *
-     * @return array
-     * @throws ImporterHttpException
-     */
-    private function appendPositiveAmountInfo(string $accountId, array $transaction, Transaction $entry): array
-    {
-        // amount is positive: deposit or transfer. Nordigen account is the destination
-        $transaction['type']   = 'deposit';
-        $transaction['amount'] = $entry->transactionAmount;
-
-        // destination is a Nordigen account (has to be!)
-        $transaction['destination_id'] = (int)$this->accounts[$accountId];
-        app('log')->debug(sprintf('Destination ID is now #%d, which should be a Firefly III asset account.', $transaction['destination_id']));
-
-        // append source iban and number (if present)
-        $transaction = $this->appendAccountFields($transaction, $entry, 'source');
-
-        // TODO clean up mapping
-        $mappedId = null;
-        if (isset($transaction['source_name'])) {
-            app('log')->debug(sprintf('Check if "%s" is mapped to an account by the user.', $transaction['source_name']));
-            $mappedId = $this->getMappedAccountId($transaction['source_name']);
-        }
-        if (null === $mappedId) {
-            app('log')->debug('Its not mapped by the user.');
-        }
-
-        if (null !== $mappedId && 0 !== $mappedId) {
-            app('log')->debug(sprintf('Account name "%s" is mapped to Firefly III account ID "%d"', $transaction['source_name'], $mappedId));
-            $mappedType               = $this->getMappedAccountType($mappedId);
-            $originalSourceName       = $transaction['source_name'];
-            $transaction['source_id'] = $mappedId;
-            // catch error here:
-            try {
-                $transaction['type'] = $this->getTransactionType($mappedType, 'asset');
-                app('log')->debug(sprintf('Transaction type seems to be %s', $transaction['type']));
-            } catch (ImporterErrorException $e) {
-                app('log')->error($e->getMessage());
-                app('log')->info('Will not use mapped ID, Firefly III account is of the wrong type.');
-                unset($transaction['source_id']);
-                $transaction['source_name'] = $originalSourceName;
-            }
-        }
-
-        return $transaction;
-    }
-
-    /**
      * Handle transaction information when the amount is negative, and this is probably a withdrawal or a transfer.
      *
      * @param string      $accountId
@@ -446,7 +601,6 @@ class GenerateTransactions
      */
     private function appendNegativeAmountInfo(string $accountId, array $transaction, Transaction $entry): array
     {
-
         $transaction['amount']    = bcmul($entry->transactionAmount, '-1');
         $transaction['source_id'] = (int)$this->accounts[$accountId]; // TODO entry may not exist, then what?
 
@@ -484,140 +638,11 @@ class GenerateTransactions
     }
 
     /**
-     * @param array       $transaction
-     * @param Transaction $entry
-     * @param string      $direction
-     *
-     * @return array
+     * @param Configuration $configuration
      */
-    private function appendAccountFields(array $transaction, Transaction $entry, string $direction): array
+    public function setConfiguration(Configuration $configuration): void
     {
-        app('log')->debug(sprintf('Now in %s(transaction, entry, "%s")', __METHOD__, $direction));
-        switch ($direction) {
-            default:
-                die(sprintf('Cannot handle direction "%s"', $direction));
-            case 'source':
-                $iban      = $entry->getSourceIban();
-                $number    = $entry->getSourceNumber();
-                $name      = $entry->getSourceName();
-                $idKey     = 'source_id';
-                $ibanKey   = 'source_iban';
-                $nameKey   = 'source_name';
-                $numberKey = 'source_number';
-                break;
-            case 'destination':
-                $iban      = $entry->getDestinationIban();
-                $number    = $entry->getDestinationNumber();
-                $name      = $entry->getDestinationName();
-                $idKey     = 'destination_id';
-                $ibanKey   = 'destination_iban';
-                $nameKey   = 'destination_name';
-                $numberKey = 'destination_number';
-                break;
-        }
-        $numberSearch = sprintf('%s.', $number);
-
-        // IBAN is also an ID, so use that!
-        if ('' !== (string)$iban && array_key_exists((string)$iban, $this->targetAccounts)) {
-            app('log')->debug(sprintf('Recognized %s (IBAN) as a Firefly III asset account so this is a transfer.', $iban));
-            $transaction[$idKey] = $this->targetAccounts[$iban];
-            $transaction['type'] = 'transfer';
-        }
-
-        // IBAN is not an ID, so just submit it as a field.
-        if ('' === (string)$iban || !array_key_exists((string)$iban, $this->targetAccounts)) {
-            app('log')->debug(sprintf('"%s" is not a valid IBAN OR not recognized as Firefly III asset account so submitted as-is.', $iban));
-            // source is the other side:
-            $transaction[$nameKey] = $name ?? sprintf('(unknown %s account)', $direction);
-            if ('' !== (string)$iban) {
-                app('log')->debug(sprintf('Set field "%s" to "%s".', $ibanKey, $iban));
-                $transaction[$ibanKey] = $iban;
-            }
-            if ('' === (string)$iban) {
-                app('log')->debug(sprintf('IBAN is "%s", so leave field "%s" empty.', $iban, $ibanKey));
-            }
-        }
-
-        // source is also an ID, so use it!
-        if ('' !== (string)$number && '.' !== $numberSearch && array_key_exists($numberSearch, $this->targetAccounts)) {
-            app('log')->debug(sprintf('Recognized "%s" (number) as a Firefly III asset account so this is a transfer.', $number));
-            $transaction[$idKey] = $this->targetAccounts[$numberSearch];
-            $transaction['type'] = 'transfer';
-        }
-
-        if ('' === (string)$number || '.' === $numberSearch || !array_key_exists($numberSearch, $this->targetAccounts)) {
-            app('log')->debug(sprintf('"%s" is not a valid account nr OR not recognized as Firefly III asset account so submitted as-is.', $number));
-            // source is the other side:
-            $transaction[$nameKey] = $name ?? sprintf('(unknown %s account)', $direction);
-            if ('' !== (string)$number) {
-                app('log')->debug(sprintf('Set field "%s" to "%s".', $numberKey, $number));
-                $transaction[$numberKey] = $number;
-            }
-            if ('' === (string)$number) {
-                app('log')->debug(sprintf('Account number is "%s", so leave field "%s" empty.', $number, $numberKey));
-            }
-        }
-        app('log')->debug(sprintf('End of %s', __METHOD__));
-
-        return $transaction;
-    }
-
-    /**
-     * @param string $iban
-     *
-     * @return string
-     */
-    private function filterSpaces(string $iban): string
-    {
-        $search = [
-            "\u{0001}", // start of heading
-            "\u{0002}", // start of text
-            "\u{0003}", // end of text
-            "\u{0004}", // end of transmission
-            "\u{0005}", // enquiry
-            "\u{0006}", // ACK
-            "\u{0007}", // BEL
-            "\u{0008}", // backspace
-            "\u{000E}", // shift out
-            "\u{000F}", // shift in
-            "\u{0010}", // data link escape
-            "\u{0011}", // DC1
-            "\u{0012}", // DC2
-            "\u{0013}", // DC3
-            "\u{0014}", // DC4
-            "\u{0015}", // NAK
-            "\u{0016}", // SYN
-            "\u{0017}", // ETB
-            "\u{0018}", // CAN
-            "\u{0019}", // EM
-            "\u{001A}", // SUB
-            "\u{001B}", // escape
-            "\u{001C}", // file separator
-            "\u{001D}", // group separator
-            "\u{001E}", // record separator
-            "\u{001F}", // unit separator
-            "\u{007F}", // DEL
-            "\u{00A0}", // non-breaking space
-            "\u{1680}", // ogham space mark
-            "\u{180E}", // mongolian vowel separator
-            "\u{2000}", // en quad
-            "\u{2001}", // em quad
-            "\u{2002}", // en space
-            "\u{2003}", // em space
-            "\u{2004}", // three-per-em space
-            "\u{2005}", // four-per-em space
-            "\u{2006}", // six-per-em space
-            "\u{2007}", // figure space
-            "\u{2008}", // punctuation space
-            "\u{2009}", // thin space
-            "\u{200A}", // hair space
-            "\u{200B}", // zero width space
-            "\u{202F}", // narrow no-break space
-            "\u{3000}", // ideographic space
-            "\u{FEFF}", // zero width no -break space
-            "\x20", // plain old normal space
-        ];
-
-        return str_replace($search, '', $iban);
+        $this->configuration = $configuration;
+        $this->accounts      = $configuration->getAccounts();
     }
 }

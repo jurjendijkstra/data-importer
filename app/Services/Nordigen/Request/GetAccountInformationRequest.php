@@ -22,9 +22,9 @@
 
 declare(strict_types=1);
 
-
 namespace App\Services\Nordigen\Request;
 
+use App\Exceptions\AgreementExpiredException;
 use App\Exceptions\ImporterErrorException;
 use App\Services\Nordigen\Response\ArrayResponse;
 use App\Services\Shared\Response\Response;
@@ -51,29 +51,14 @@ class GetAccountInformationRequest extends Request
     }
 
     /**
-     * @return string
-     */
-    public function getIdentifier(): string
-    {
-        return $this->identifier;
-    }
-
-    /**
-     * @param string $identifier
-     */
-    public function setIdentifier(string $identifier): void
-    {
-        $this->identifier = $identifier;
-    }
-
-    /**
      * @inheritDoc
      * @throws ImporterErrorException
+     * @throws AgreementExpiredException
      */
     public function get(): Response
     {
-
         $array = $this->authenticatedGet();
+
         return new ArrayResponse($array);
     }
 
@@ -91,5 +76,21 @@ class GetAccountInformationRequest extends Request
     public function put(): Response
     {
         // Implement put() method.
+    }
+
+    /**
+     * @return string
+     */
+    public function getIdentifier(): string
+    {
+        return $this->identifier;
+    }
+
+    /**
+     * @param string $identifier
+     */
+    public function setIdentifier(string $identifier): void
+    {
+        $this->identifier = $identifier;
     }
 }

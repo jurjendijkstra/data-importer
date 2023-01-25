@@ -37,8 +37,8 @@ trait HaveAccess
      */
     private function haveAccess(): bool
     {
-        $url     = (string) config('importer.url');
-        $token   = (string) config('importer.access_token');
+        $url     = (string)config('importer.url');
+        $token   = (string)config('importer.access_token');
         $request = new SystemInformationRequest($url, $token);
 
         $request->setVerify(config('importer.connection.verify'));
@@ -47,7 +47,7 @@ trait HaveAccess
         try {
             $request->get();
         } catch (ApiHttpException $e) {
-            $this->error(sprintf('Could not connect to Firefly III: %s', $e->getMessage()));
+            $this->error(sprintf('Could not connect to Firefly III at %s: %s', $url, $e->getMessage()));
 
             return false;
         }
@@ -65,6 +65,7 @@ trait HaveAccess
 
     /**
      * @param string $path
+     *
      * @return bool
      */
     private function isAllowedPath(string $path): bool
@@ -73,14 +74,17 @@ trait HaveAccess
         $paths = config('importer.import_dir_whitelist');
         if (null === $paths) {
             $this->warn($error);
+
             return false;
         }
         if (is_array($paths) && 0 === count($paths)) {
             $this->warn($error);
+
             return false;
         }
         if (is_array($paths) && 1 === count($paths) && '' === $paths[0]) {
             $this->warn($error);
+
             return false;
         }
 

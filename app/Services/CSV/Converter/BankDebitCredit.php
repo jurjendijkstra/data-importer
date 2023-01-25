@@ -24,18 +24,17 @@ declare(strict_types=1);
 
 namespace App\Services\CSV\Converter;
 
-
 /**
  *
  * Class BankDebitCredit
  */
 class BankDebitCredit implements ConverterInterface
 {
-
     /**
      * Convert a value.
      *
      * @param $value
+     *
      * @return mixed
      *
      */
@@ -51,6 +50,7 @@ class BankDebitCredit implements ConverterInterface
             'Debit', // ING (EN), thx Quibus!
             'S', // Volksbank (DE), Short for "Soll"
             'DBIT', // https://subsembly.com/index.html (Banking4 App)
+            'Charge', // not sure which bank but it's insane.
         ];
         if (in_array(trim($value), $negative, true)) {
             return -1;
@@ -66,6 +66,5 @@ class BankDebitCredit implements ConverterInterface
      */
     public function setConfiguration(string $configuration): void
     {
-
     }
 }

@@ -22,9 +22,9 @@
 
 declare(strict_types=1);
 
-
 namespace App\Services\Nordigen\Services;
 
+use App\Exceptions\AgreementExpiredException;
 use App\Exceptions\ImporterErrorException;
 use App\Exceptions\ImporterHttpException;
 use App\Services\Nordigen\Model\Account;
@@ -44,7 +44,9 @@ class AccountInformationCollector
 {
     /**
      * @param Account $account
+     *
      * @return Account
+     * @throws AgreementExpiredException
      */
     public static function collectInformation(Account $account): Account
     {
@@ -54,7 +56,7 @@ class AccountInformationCollector
         $detailedAccount = $account;
         try {
             $detailedAccount = self::getAccountDetails($account);
-        } catch (ImporterHttpException | ImporterErrorException $e) {
+        } catch (ImporterHttpException|ImporterErrorException $e) {
             app('log')->error($e->getMessage());
             // ignore error otherwise for now.
             $detailedAccount->setStatus('no-info');
@@ -64,7 +66,7 @@ class AccountInformationCollector
 
         try {
             $balanceAccount = self::getBalanceDetails($account);
-        } catch (ImporterHttpException | ImporterErrorException $e) {
+        } catch (ImporterHttpException|ImporterErrorException $e) {
             app('log')->error($e->getMessage());
             // ignore error otherwise for now.
             $status = $balanceAccount->getStatus();
@@ -82,9 +84,11 @@ class AccountInformationCollector
 
     /**
      * @param Account $account
+     *
      * @return Account
      * @throws ImporterErrorException
      * @throws ImporterHttpException
+     * @throws AgreementExpiredException
      */
     protected static function getAccountDetails(Account $account): Account
     {
@@ -94,8 +98,16 @@ class AccountInformationCollector
         $accessToken = TokenManager::getAccessToken();
         $request     = new GetAccountInformationRequest($url, $accessToken, $account->getIdentifier());
         /** @var ArrayResponse $response */
-        $response    = $request->get();
+
+        $response = $request->get();
+
+        if (!array_key_exists('account', $response->data)) {
+            app('log')->error('Missing account array', $response->data);
+            throw new ImporterHttpException('No account array, exit.');
+        }
+
         $information = $response->data['account'];
+
         app('log')->debug('getAccountDetails: Collected information for account', $information);
 
         $account->setResourceId($information['resource_id'] ?? '');
@@ -132,6 +144,7 @@ class AccountInformationCollector
 
     /**
      * @param Account $account
+     *
      * @return Account
      * @throws ImporterErrorException
      * @throws ImporterHttpException
@@ -143,13 +156,16 @@ class AccountInformationCollector
         $url         = config('nordigen.url');
         $accessToken = TokenManager::getAccessToken();
         $request     = new GetAccountBalanceRequest($url, $accessToken, $account->getIdentifier());
+        $request->setTimeOut(config('importer.connection.timeout'));
         /** @var ArrayResponse $response */
         $response = $request->get();
-
-        foreach ($response->data['balances'] as $array) {
-            app('log')->debug(sprintf('Added "%s" balance "%s"', $array['balanceType'], $array['balanceAmount']['amount']));
-            $account->addBalance(Balance::createFromArray($array));
+        if (array_key_exists('balances', $response->data)) {
+            foreach ($response->data['balances'] as $array) {
+                app('log')->debug(sprintf('Added "%s" balance "%s"', $array['balanceType'], $array['balanceAmount']['amount']));
+                $account->addBalance(Balance::createFromArray($array));
+            }
         }
+
         return $account;
     }
 
@@ -163,6 +179,7 @@ class AccountInformationCollector
         $url         = config('nordigen.url');
         $accessToken = TokenManager::getAccessToken();
         $request     = new GetAccountBasicRequest($url, $accessToken, $account->getIdentifier());
+        $request->setTimeOut(config('importer.connection.timeout'));
         /** @var ArrayResponse $response */
         $response = $request->get();
         $array    = $response->data;
@@ -176,5 +193,4 @@ class AccountInformationCollector
 
         return $account;
     }
-
 }
